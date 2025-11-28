@@ -1,0 +1,26 @@
+cat > admin/eliminar_horario.php << 'EOF'
+<?php
+session_start();
+if (!isset($_SESSION['admin_logged_in'])) {
+    header("Location: login.php");
+    exit();
+}
+
+include_once '../config/database.php';
+$database = new Database();
+$db = $database->getConnection();
+
+if (isset($_GET['id'])) {
+    $id = intval($_GET['id']);
+    
+    // Eliminar horario
+    $query = "DELETE FROM horarios WHERE id = :id";
+    $stmt = $db->prepare($query);
+    $stmt->bindParam(":id", $id);
+    $stmt->execute();
+}
+
+header("Location: horarios.php");
+exit();
+?>
+EOF

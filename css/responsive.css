@@ -1,0 +1,268 @@
+cat > css/responsive.css << 'EOF'
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .container {
+        width: 95%;
+    }
+    
+    .disciplines-grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+}
+
+@media (max-width: 992px) {
+    h1 {
+        font-size: 3rem;
+    }
+    
+    h2 {
+        font-size: 2.2rem;
+    }
+    
+    .hero {
+        padding: 150px 0 100px;
+    }
+    
+    .about-content,
+    .location-content,
+    .contact-content {
+        flex-direction: column;
+    }
+    
+    .hero-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .hero-buttons .btn {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-container {
+        flex-direction: column;
+        text-align: center;
+        padding: 10px 0;
+    }
+
+    nav ul {
+        margin-top: 15px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    nav ul li {
+        margin: 5px 10px;
+    }
+
+    h1 {
+        font-size: 2.5rem;
+    }
+    
+    h2 {
+        font-size: 2rem;
+    }
+
+    .hero h1 {
+        font-size: 2.8rem;
+    }
+
+    .hero p {
+        font-size: 1.1rem;
+    }
+
+    section {
+        padding: 60px 0;
+    }
+
+    .disciplines-grid,
+    .instructors-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .schedule-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .gallery-grid {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+
+    .newsletter-form {
+        flex-direction: column;
+    }
+    
+    .newsletter-form input,
+    .newsletter-form button {
+        width: 100%;
+    }
+
+    .footer-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .features {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 576px) {
+    .hero {
+        padding: 120px 0 80px;
+        margin-top: 80px;
+    }
+
+    .hero h1 {
+        font-size: 2.2rem;
+    }
+    
+    h2 {
+        font-size: 1.8rem;
+    }
+
+    .container {
+        width: 95%;
+        padding: 15px 0;
+    }
+
+    section {
+        padding: 40px 0;
+    }
+
+    .gallery-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .discipline-card,
+    .instructor-card,
+    .schedule-day {
+        margin: 0 10px;
+    }
+    
+    .about-image,
+    .location-map {
+        min-width: 100%;
+    }
+    
+    .contact-form {
+        padding: 20px;
+    }
+    
+    .btn {
+        padding: 12px 24px;
+        font-size: 1rem;
+    }
+    
+    .logo {
+        font-size: 24px;
+    }
+    
+    nav ul li {
+        margin: 3px 8px;
+    }
+    
+    nav ul li a {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 400px) {
+    .hero h1 {
+        font-size: 1.8rem;
+    }
+    
+    h2 {
+        font-size: 1.6rem;
+    }
+    
+    .disciplines-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .discipline-card,
+    .instructor-card {
+        margin: 0 5px;
+    }
+    
+    .gallery-item {
+        height: 200px;
+    }
+}
+
+/* Print Styles */
+@media print {
+    header,
+    .newsletter,
+    .hero-buttons,
+    .social-links {
+        display: none;
+    }
+    
+    .hero {
+        background: white !important;
+        color: black !important;
+        padding: 50px 0;
+    }
+    
+    .hero h1 {
+        color: black !important;
+    }
+    
+    section {
+        padding: 30px 0;
+        page-break-inside: avoid;
+    }
+    
+    .btn {
+        display: none;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .btn-primary {
+        background: #000;
+        color: #fff;
+        border: 2px solid #fff;
+    }
+    
+    .btn-secondary {
+        background: #fff;
+        color: #000;
+        border: 2px solid #000;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .hero {
+        background-attachment: scroll;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .disciplines,
+    .schedule,
+    .gallery {
+        background: #1a1a1a;
+        color: #fff;
+    }
+    
+    .discipline-card,
+    .instructor-card,
+    .schedule-day {
+        background: #2d2d2d;
+        color: #fff;
+    }
+}
+EOF
