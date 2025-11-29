@@ -1,0 +1,39 @@
+<?php
+class Database {
+    private $db;
+    
+    public function __construct() {
+        try {
+            // Ruta de la base de datos
+            $db_path = __DIR__ . '/../database/academia_lago.db';
+            
+            // Crear directorio si no existe
+            if (!file_exists(dirname($db_path))) {
+                mkdir(dirname($db_path), 0755, true);
+            }
+            
+            // Conectar a SQLite
+            $this->db = new SQLite3($db_path);
+            $this->db->enableExceptions(true);
+            
+            // Configuraciones
+            $this->db->exec('PRAGMA encoding = "UTF-8"');
+            $this->db->exec('PRAGMA foreign_keys = ON');
+            $this->db->busyTimeout(5000);
+            
+        } catch (Exception $e) {
+            error_log("Error SQLite: " . $e->getMessage());
+            die("Error conectando a la base de datos.");
+        }
+    }
+    
+    public function getConnection() {
+        return $this->db;
+    }
+}
+
+function getDBConnection() {
+    $database = new Database();
+    return $database->getConnection();
+}
+?>

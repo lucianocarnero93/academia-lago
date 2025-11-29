@@ -6,7 +6,7 @@ if (!isset($_SESSION['admin_logged_in'])) {
     exit();
 }
 
-include_once '../config/database.php';
+include_once '../config.php';
 $database = new Database();
 $db = $database->getConnection();
 

@@ -1,4 +1,3 @@
-cat > admin/galeria.php << 'EOF'
 <?php
 session_start();
 if (!isset($_SESSION['admin_logged_in'])) {
@@ -6,61 +5,95 @@ if (!isset($_SESSION['admin_logged_in'])) {
     exit();
 }
 
-include_once '../config/database.php';
+include_once '../config.php';
 $database = new Database();
 $db = $database->getConnection();
+
+$mensaje = '';
+$error = '';
 
 // Procesar subida de archivos
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['subir_archivo'])) {
     $titulo = htmlspecialchars(trim($_POST['titulo']));
     $descripcion = htmlspecialchars(trim($_POST['descripcion']));
-    $tipo = $_POST['tipo'];
+    $categoria = htmlspecialchars(trim($_POST['categoria']));
     
-    if (!empty($_FILES['archivo']['name'])) {
-        $target_dir = "../uploads/galeria/";
-        if (!is_dir($target_dir)) {
-            mkdir($target_dir, 0777, true);
-        }
+    // Procesar imagen
+    if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
+        $archivo_tmp = $_FILES['imagen']['tmp_name'];
+        $nombre_archivo = basename($_FILES['imagen']['name']);
+        $extension = strtolower(pathinfo($nombre_archivo, PATHINFO_EXTENSION));
         
-        $file_extension = strtolower(pathinfo($_FILES['archivo']['name'], PATHINFO_EXTENSION));
-        $new_filename = uniqid() . '_' . time() . '.' . $file_extension;
-        $target_file = $target_dir . $new_filename;
+        // Extensiones permitidas
+        $extensiones_permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         
-        // Validar tipo de archivo
-        $allowed_image_extensions = ['jpg', 'jpeg', 'png', 'gif'];
-        $allowed_video_extensions = ['mp4', 'avi', 'mov', 'wmv'];
-        
-        if (($tipo == 'imagen' && in_array($file_extension, $allowed_image_extensions)) ||
-            ($tipo == 'video' && in_array($file_extension, $allowed_video_extensions))) {
+        if (in_array($extension, $extensiones_permitidas)) {
+            // Crear directorio de uploads si no existe
+            $directorio_uploads = '../uploads/galeria/';
+            if (!is_dir($directorio_uploads)) {
+                mkdir($directorio_uploads, 0755, true);
+            }
             
-            if (move_uploaded_file($_FILES['archivo']['tmp_name'], $target_file)) {
-                $query = "INSERT INTO galeria (titulo, descripcion, archivo, tipo) 
-                         VALUES (:titulo, :descripcion, :archivo, :tipo)";
-                $stmt = $db->prepare($query);
-                $stmt->bindParam(":titulo", $titulo);
-                $stmt->bindParam(":descripcion", $descripcion);
-                $stmt->bindParam(":archivo", $new_filename);
-                $stmt->bindParam(":tipo", $tipo);
-                
-                if ($stmt->execute()) {
-                    $mensaje_exito = "Archivo subido exitosamente";
-                } else {
-                    $mensaje_error = "Error al guardar en la base de datos";
+            // Generar nombre único
+            $nuevo_nombre = uniqid() . '.' . $extension;
+            $ruta_destino = $directorio_uploads . $nuevo_nombre;
+            
+            if (move_uploaded_file($archivo_tmp, $ruta_destino)) {
+                // Insertar en base de datos
+                try {
+                    $query = "INSERT INTO galeria (titulo, imagen, descripcion, categoria, activo) VALUES (?, ?, ?, ?, 1)";
+                    $stmt = $db->prepare($query);
+                    $stmt->execute([$titulo, $nuevo_nombre, $descripcion, $categoria]);
+                    $mensaje = "Imagen subida correctamente";
+                } catch (PDOException $e) {
+                    $error = "Error al guardar en base de datos: " . $e->getMessage();
+                    // Eliminar archivo subido si hay error en BD
+                    unlink($ruta_destino);
                 }
             } else {
-                $mensaje_error = "Error al subir el archivo";
+                $error = "Error al mover el archivo";
             }
         } else {
-            $mensaje_error = "Tipo de archivo no permitido";
+            $error = "Formato de archivo no permitido. Use: " . implode(', ', $extensiones_permitidas);
         }
+    } else {
+        $error = "Por favor seleccione una imagen válida";
     }
 }
 
-// Obtener galería
-$query = "SELECT * FROM galeria WHERE activo = 1 ORDER BY fecha_subida DESC";
+// Procesar eliminación
+if (isset($_GET['eliminar'])) {
+    $id = intval($_GET['eliminar']);
+    try {
+        // Obtener nombre del archivo
+        $query = "SELECT imagen FROM galeria WHERE id = ?";
+        $stmt = $db->prepare($query);
+        $stmt->execute([$id]);
+        $archivo = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($archivo) {
+            // Eliminar archivo físico
+            $ruta_archivo = '../uploads/galeria/' . $archivo['imagen'];
+            if (file_exists($ruta_archivo)) {
+                unlink($ruta_archivo);
+            }
+            
+            // Eliminar de base de datos
+            $query = "DELETE FROM galeria WHERE id = ?";
+            $stmt = $db->prepare($query);
+            $stmt->execute([$id]);
+            $mensaje = "Imagen eliminada correctamente";
+        }
+    } catch (PDOException $e) {
+        $error = "Error al eliminar: " . $e->getMessage();
+    }
+}
+
+// Obtener archivos de la galería
+$query = "SELECT * FROM galeria WHERE activo = 1 ORDER BY created_at DESC";
 $stmt = $db->prepare($query);
 $stmt->execute();
-$galeria = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$archivos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -69,280 +102,128 @@ $galeria = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Galería - Academia del Lago</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f5f5f5; color: #333; }
+        .header { background: #1a3a5f; color: white; padding: 20px 0; }
+        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        .btn { display: inline-block; padding: 10px 20px; text-decoration: none; border-radius: 6px; margin: 5px; border: none; cursor: pointer; }
+        .btn-primary { background: #1a3a5f; color: white; }
+        .btn-secondary { background: #e6b325; color: #1a3a5f; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; margin-top: 20px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+        th { background: #f8f9fa; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group textarea, .form-group select { 
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; 
         }
-        
-        body { 
-            background: #f5f5f5; 
-            color: #333;
-        }
-        
-        .header { 
-            background: #1a3a5f; 
-            color: white; 
-            padding: 20px 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .header-content {
-            width: 90%;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .container { 
-            max-width: 1200px; 
-            margin: 30px auto; 
-            padding: 0 20px;
-        }
-        
-        .form-section { 
-            margin-bottom: 40px; 
-            padding: 30px; 
-            background: white; 
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-        }
-        
-        .form-group { 
-            margin-bottom: 20px; 
-        }
-        
-        label { 
-            display: block; 
-            margin-bottom: 8px; 
-            font-weight: bold;
-            color: #1a3a5f;
-        }
-        
-        input, textarea, select { 
-            width: 100%; 
-            padding: 12px 15px; 
-            border: 2px solid #e0e0e0; 
-            border-radius: 6px; 
-            font-size: 1rem;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: #1a3a5f;
-        }
-        
-        button { 
-            background: #1a3a5f; 
-            color: white; 
-            padding: 12px 30px; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-size: 1rem;
-            font-weight: 600;
-            transition: background-color 0.3s;
-        }
-        
-        button:hover {
-            background: #2a5a8f;
-        }
-        
-        .galeria-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
-            gap: 20px; 
-            margin-top: 20px;
-        }
-        
-        .galeria-item { 
-            border: 1px solid #e0e0e0; 
-            border-radius: 8px; 
-            overflow: hidden;
-            background: white;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }
-        
-        .galeria-item img, .galeria-item video { 
-            width: 100%; 
-            height: 200px; 
-            object-fit: cover; 
-            display: block;
-        }
-        
-        .galeria-info { 
-            padding: 15px; 
-        }
-        
-        .mensaje { 
-            padding: 15px; 
-            margin: 15px 0; 
-            border-radius: 6px; 
-            font-weight: 500;
-        }
-        
-        .exito { 
-            background: #d4edda; 
-            color: #155724; 
-            border: 1px solid #c3e6cb; 
-        }
-        
-        .error { 
-            background: #f8d7da; 
-            color: #721c24; 
-            border: 1px solid #f5c6cb; 
-        }
-        
-        .btn { 
-            display: inline-block; 
-            padding: 8px 16px; 
-            text-decoration: none; 
-            border-radius: 4px; 
-            margin: 2px; 
-            font-size: 0.9rem;
-            transition: all 0.3s;
-        }
-        
-        .btn-danger { 
-            background: #dc3545; 
-            color: white; 
-        }
-        
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        
-        .nav { 
-            margin-bottom: 30px;
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .nav a { 
-            padding: 10px 20px;
-            text-decoration: none; 
-            color: #1a3a5f; 
-            font-weight: bold;
-            background: white;
-            border-radius: 6px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: all 0.3s;
-        }
-        
-        .nav a:hover {
-            background: #1a3a5f;
-            color: white;
-        }
-        
-        .section-title {
-            color: #1a3a5f;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #e6b325;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-            background: white;
-            border-radius: 8px;
-            border: 2px dashed #ddd;
-        }
+        .alert { padding: 15px; margin: 15px 0; border-radius: 4px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-danger { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .imagen-miniatura { width: 100px; height: 80px; object-fit: cover; border-radius: 4px; }
+        .seccion { background: white; padding: 25px; border-radius: 8px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="header-content">
-            <h1>Gestión de Galería - Academia del Lago</h1>
+        <div style="width: 90%; max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
+            <h1>Galería - Academia del Lago</h1>
+            <a href="dashboard.php" class="btn btn-secondary">Volver al Dashboard</a>
         </div>
     </div>
     
     <div class="container">
-        <div class="nav">
-            <a href="dashboard.php">Dashboard</a>
-            <a href="galeria.php">Galería</a>
-            <a href="profesores.php">Profesores</a>
-            <a href="horarios.php">Horarios</a>
-            <a href="logout.php" style="margin-left: auto; background: #dc3545; color: white;">Cerrar Sesión</a>
-        </div>
+        <?php if ($mensaje): ?>
+            <div class="alert alert-success"><?php echo $mensaje; ?></div>
+        <?php endif; ?>
         
-        <!-- Formulario para subir archivos -->
-        <div class="form-section">
-            <h2 class="section-title">Subir Nuevo Archivo</h2>
-            
-            <?php if (isset($mensaje_exito)): ?>
-                <div class="mensaje exito"><?php echo $mensaje_exito; ?></div>
-            <?php endif; ?>
-            
-            <?php if (isset($mensaje_error)): ?>
-                <div class="mensaje error"><?php echo $mensaje_error; ?></div>
-            <?php endif; ?>
-            
+        <?php if ($error): ?>
+            <div class="alert alert-danger"><?php echo $error; ?></div>
+        <?php endif; ?>
+
+        <!-- Formulario para subir imágenes -->
+        <div class="seccion">
+            <h2>Subir Nueva Imagen</h2>
             <form method="POST" enctype="multipart/form-data">
                 <div class="form-group">
-                    <label>Título:</label>
-                    <input type="text" name="titulo" required>
+                    <label for="titulo">Título:</label>
+                    <input type="text" id="titulo" name="titulo" required>
                 </div>
                 
                 <div class="form-group">
-                    <label>Descripción:</label>
-                    <textarea name="descripcion" rows="3"></textarea>
+                    <label for="descripcion">Descripción:</label>
+                    <textarea id="descripcion" name="descripcion" rows="3"></textarea>
                 </div>
                 
                 <div class="form-group">
-                    <label>Tipo:</label>
-                    <select name="tipo" required>
-                        <option value="imagen">Imagen</option>
-                        <option value="video">Video</option>
+                    <label for="categoria">Categoría:</label>
+                    <select id="categoria" name="categoria">
+                        <option value="Clases">Clases</option>
+                        <option value="Eventos">Eventos</option>
+                        <option value="Grados">Grados</option>
+                        <option value="Competiciones">Competiciones</option>
+                        <option value="General">General</option>
                     </select>
                 </div>
                 
                 <div class="form-group">
-                    <label>Archivo:</label>
-                    <input type="file" name="archivo" accept="image/*,video/*" required>
+                    <label for="imagen">Imagen:</label>
+                    <input type="file" id="imagen" name="imagen" accept="image/*" required>
+                    <small>Formatos permitidos: JPG, JPEG, PNG, GIF, WEBP</small>
                 </div>
                 
-                <button type="submit" name="subir_archivo">Subir Archivo</button>
+                <button type="submit" name="subir_archivo" class="btn btn-success">Subir Imagen</button>
             </form>
         </div>
-        
-        <!-- Galería existente -->
-        <div class="form-section">
-            <h2 class="section-title">Galería Actual</h2>
-            
-            <?php if (count($galeria) > 0): ?>
-                <div class="galeria-grid">
-                    <?php foreach ($galeria as $item): ?>
-                        <div class="galeria-item">
-                            <?php if ($item['tipo'] == 'imagen'): ?>
-                                <img src="../uploads/galeria/<?php echo $item['archivo']; ?>" alt="<?php echo $item['titulo']; ?>">
-                            <?php else: ?>
-                                <video controls>
-                                    <source src="../uploads/galeria/<?php echo $item['archivo']; ?>" type="video/mp4">
-                                </video>
-                            <?php endif; ?>
-                            <div class="galeria-info">
-                                <strong><?php echo $item['titulo']; ?></strong>
-                                <p><?php echo $item['descripcion']; ?></p>
-                                <small><?php echo $item['fecha_subida']; ?></small>
-                                <br>
-                                <a href="eliminar_archivo.php?id=<?php echo $item['id']; ?>" class="btn btn-danger" 
-                                   onclick="return confirm('¿Estás seguro de eliminar este archivo?')">Eliminar</a>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+
+        <!-- Lista de imágenes existentes -->
+        <div class="seccion">
+            <h2>Imágenes en la Galería</h2>
+            <?php if (count($archivos) > 0): ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Imagen</th>
+                            <th>Título</th>
+                            <th>Descripción</th>
+                            <th>Categoría</th>
+                            <th>Fecha</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($archivos as $archivo): ?>
+                            <tr>
+                                <td>
+                                    <?php if (file_exists('../uploads/galeria/' . $archivo['imagen'])): ?>
+                                        <img src="../uploads/galeria/<?php echo $archivo['imagen']; ?>" 
+                                             alt="<?php echo htmlspecialchars($archivo['titulo']); ?>" 
+                                             class="imagen-miniatura">
+                                    <?php else: ?>
+                                        <span style="color: #999;">No encontrada</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo htmlspecialchars($archivo['titulo']); ?></td>
+                                <td><?php echo htmlspecialchars($archivo['descripcion']); ?></td>
+                                <td><?php echo htmlspecialchars($archivo['categoria']); ?></td>
+                                <td><?php echo date('d/m/Y', strtotime($archivo['created_at'])); ?></td>
+                                <td>
+                                    <a href="?eliminar=<?php echo $archivo['id']; ?>" 
+                                       class="btn btn-danger" 
+                                       onclick="return confirm('¿Está seguro de eliminar esta imagen?')">
+                                        Eliminar
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             <?php else: ?>
-                <div class="empty-state">
-                    <h3>No hay archivos en la galería</h3>
-                    <p>Comienza subiendo tu primer archivo usando el formulario de arriba.</p>
-                </div>
+                <p>No hay imágenes en la galería. Sube la primera imagen usando el formulario arriba.</p>
             <?php endif; ?>
         </div>
     </div>
 </body>
 </html>
-EOF
